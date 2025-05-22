@@ -1,15 +1,44 @@
 ---
+#я создал этот блок задач с целью отладки, чтобы он чистил мне старое состояние конфигурации после предыдущего запуска плейбука
+- name: Очистка и подготовка сервера
+  hosts: all
+  become: true
+  tasks:
+    - name: Остановка и удаление контейнеров
+      shell: |
+        docker stop $(docker ps -aq) 2>/dev/null || true
+        docker rm -f $(docker ps -aq) 2>/dev/null || true
+        docker volume rm $(docker volume ls -q) 2>/dev/null || true
+        docker network rm $(docker network ls -q --filter "name=wp_net") 2>/dev/null || true
+        rm -rf /var/lib/docker/volumes/wp_*
+        rm -rf /var/lib/docker/volumes/postgres_*
+
+    - name: Очистка Docker системы
+      shell: docker system prune -af
+      ignore_errors: yes
+
+    - name: Перезапуск Docker
+      service:
+        name: docker
+        state: restarted
+
+    - name: Вывод информации о портах
+      debug:
+        var: ports_check.stdout_lines
+
 - name: Установка Docker и PostgreSQL для развертывания Wordpress
   hosts: all
   become: true
   vars:
     docker_users: [vald3mar]
-    postgres_root_pswd: admin
-    postgres_db: wordpress
-    postgres_user: wp_user
-    postgres_pswd: wp_pswd
-    db_port: 5432           
-    wp_port: 8080 
+    mysql_root_pass: "root"
+    mysql_db: "wordpress"
+    mysql_user: wp_user
+    mysql_pass: wp_pass
+    wp_port: 80
+    db_port: 3306
+    wp_network: wp_net
+
 
   tasks:
     - name: Установка Docker
@@ -60,35 +89,27 @@
 
     - name: Инициализация Docker-сети
       community.docker.docker_network:
-        name: wp_net
+        name: "{{ wp_network }}"
         state: present
 
-    - name: Запустить контейнер с PostgreSQL и проверить статус
+    - name: Запустить контейнер с MySQL и проверить статус
       block:
       - name: Установка контейнера
         community.docker.docker_container:
-          name: postgres
-          image: postgres:latest
+          name: mysql_db
+          image: mysql:8.0
           restart_policy: always
           env:
-            POSTGRES_ROOT_PASSWORD: "{{ postgres_root_pswd }}"
-            POSTGRES_DB: "{{ postgres_db }}"
-            POSTGRES_USER: "{{ postgres_user }}"
-            POSTGRES_PASSWORD: "{{ postgres_pswd }}"
+            MYSQL_ROOT_PASSWORD: "{{ mysql_root_pass }}"
+            MYSQL_DATABASE: "{{ mysql_db }}"
+            MYSQL_USER: "{{ mysql_user }}"
+            MYSQL_PASSWORD: "{{ mysql_pass }}"
           ports:
-            - "5432:5432"
+            - "{{ db_port }}:{{ db_port }}"
           networks:
-            - name: wp_net
+            - name: "{{ wp_network }}"
           volumes:
-            - postgres_data:/var/lib/postgresql/data
-
-      - name: Проверить, что PostgreSQL контейнер запущен
-        shell: docker ps --filter "name=postgres" --format "{{ '{{' }}.Status{{ '}}' }}"
-        register: postgres_status
-
-      - name: Вывести статус PostgreSQL контейнера
-        debug:
-          msg: "PostgreSQL контейнер статус: {{ postgres_status.stdout }}"
+            - mysql_data:/var/lib/mysql
 
     - name: Запустить контейнер с WordPress
       community.docker.docker_container:
@@ -96,16 +117,22 @@
         image: wordpress:latest
         restart_policy: always
         env:
-          WORDPRESS_DB_HOST: "postgres:{{ db_port }}"
-          WORDPRESS_DB_NAME: "{{ postgres_db }}"
-          WORDPRESS_DB_USER: "{{ postgres_user }}" 
-          WORDPRESS_DB_PASSWORD: "{{ postgres_pswd }}"
+          WORDPRESS_DB_HOST: "mysql_db:{{ db_port }}"
+          WORDPRESS_DB_NAME: "{{ mysql_db }}"
+          WORDPRESS_DB_USER: "{{ mysql_user }}"
+          WORDPRESS_DB_PASSWORD: "{{ mysql_pass }}"
+          WORDPRESS_DEBUG: "1"
         ports:
           - "{{ wp_port }}:80"
         networks:
-          - name: wp_net
+          - name: "{{ wp_network }}"
         volumes:
-          - wordpress_data:/var/www/html
+          - wp_data:/var/www/html
+        healthcheck:
+          test: ["CMD-SHELL", "curl -f http://localhost/wp-admin/install.php || exit 1"]
+          interval: 15s
+          timeout: 10s
+          retries: 3
 
               
 
