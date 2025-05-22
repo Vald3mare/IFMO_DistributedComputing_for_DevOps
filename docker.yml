@@ -1,13 +1,15 @@
 ---
 - name: Установка Docker и PostgreSQL для развертывания Wordpress
   hosts: all
-  become: yes
+  become: true
   vars:
     docker_users: [vald3mar]
-    postgres_root_password: admin
-    postgres_database: wordpress
+    postgres_root_pswd: admin
+    postgres_db: wordpress
     postgres_user: wp_user
     postgres_pswd: wp_pswd
+    db_port: 5432           
+    wp_port: 8080 
 
   tasks:
     - name: Установка Docker
@@ -21,7 +23,7 @@
             - apt-transport-https
             - ca-certificates
             - curl
-            - sofrware-properties-common
+            - software-properties-common
 
         - name: Добавить GPG-ключ Docker
           ansible.builtin.apt_key:
@@ -61,16 +63,16 @@
         name: wp_net
         state: present
 
-    - name: Запуск контейнера с Постгрей
+    - name: Запустить контейнер с PostgreSQL и проверить статус
       block:
-        - name: Установка образа с PostgreSQL
-          community.docker.docker_container:
-            name: postgres
-            image: postgres:latest
-            restart_policy: always
-          environment:
-            POSTGRES_ROOT_PASSWORD: "{{ postgres_root_password }}"
-            POSTGRES_DATABASE: "{{ postgres_database }}"
+      - name: Установка контейнера
+        community.docker.docker_container:
+          name: postgres
+          image: postgres:latest
+          restart_policy: always
+          env:
+            POSTGRES_ROOT_PASSWORD: "{{ postgres_root_pswd }}"
+            POSTGRES_DB: "{{ postgres_db }}"
             POSTGRES_USER: "{{ postgres_user }}"
             POSTGRES_PASSWORD: "{{ postgres_pswd }}"
           ports:
@@ -78,7 +80,32 @@
           networks:
             - name: wp_net
           volumes:
-            - postgresdb_data:/var/lib/postgres
+            - postgres_data:/var/lib/postgresql/data
+
+      - name: Проверить, что PostgreSQL контейнер запущен
+        shell: docker ps --filter "name=postgres" --format "{{ '{{' }}.Status{{ '}}' }}"
+        register: postgres_status
+
+      - name: Вывести статус PostgreSQL контейнера
+        debug:
+          msg: "PostgreSQL контейнер статус: {{ postgres_status.stdout }}"
+
+    - name: Запустить контейнер с WordPress
+      community.docker.docker_container:
+        name: wordpress
+        image: wordpress:latest
+        restart_policy: always
+        env:
+          WORDPRESS_DB_HOST: "postgres:{{ db_port }}"
+          WORDPRESS_DB_NAME: "{{ postgres_db }}"
+          WORDPRESS_DB_USER: "{{ postgres_user }}" 
+          WORDPRESS_DB_PASSWORD: "{{ postgres_pswd }}"
+        ports:
+          - "{{ wp_port }}:80"
+        networks:
+          - name: wp_net
+        volumes:
+          - wordpress_data:/var/www/html
 
               
 
