@@ -88,7 +88,7 @@
             enabled: true
 
     - name: Инициализация Docker-сети
-      community.docker.docker_network:
+      docker_network:
         name: "{{ wp_network }}"
         state: present
 
