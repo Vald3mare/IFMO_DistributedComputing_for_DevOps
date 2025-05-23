@@ -31,8 +31,8 @@
   become: true
   vars:
     docker_users: [vald3mar]
-    mysql_root_pass: "root"
-    mysql_db: "wordpress"
+    mysql_root_pass: root
+    mysql_db: wordpress
     mysql_user: wp_user
     mysql_pass: wp_pass
     wp_port: 80
