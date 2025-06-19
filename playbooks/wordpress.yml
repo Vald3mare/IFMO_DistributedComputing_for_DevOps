@@ -1,0 +1,11 @@
+- name: Настройка MySQL на мастер и слейв
+  hosts: all
+  become: true
+  roles:
+    - mysql
+
+- name: Установка WordPress на мастер
+  hosts: master
+  become: true
+  roles:
+    - wordpress
