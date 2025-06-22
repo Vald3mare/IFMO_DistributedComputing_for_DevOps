@@ -1,0 +1,68 @@
+- name: Установить зависимости
+  apt:
+    name:
+      - apache2
+      - php
+      - php-mysql
+      - libapache2-mod-php
+      - wget
+      - unzip
+      - mysql-client
+    state: present
+    update_cache: yes
+
+- name: Скачать WordPress
+  get_url:
+    url: https://wordpress.org/latest.zip
+    dest: /tmp/wordpress.zip
+
+- name: Распаковать WordPress
+  unarchive:
+    src: /tmp/wordpress.zip
+    dest: /var/www/html/
+    remote_src: yes
+
+- name: Копировать содержимое WordPress в корень сайта
+  copy:
+    remote_src: yes
+    src: /var/www/html/wordpress/
+    dest: /var/www/html/
+    owner: www-data
+    group: www-data
+    mode: preserve
+
+- name: Удалить директорию wordpress
+  file:
+    path: /var/www/html/wordpress
+    state: absent
+
+- name: Создать wp-config.php
+  copy:
+    src: /var/www/html/wp-config-sample.php
+    dest: /var/www/html/wp-config.php
+    remote_src: yes
+    owner: www-data
+    group: www-data
+
+- name: Настроить параметры подключения к БД
+  lineinfile:
+    path: /var/www/html/wp-config.php
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: "define\\( *'DB_NAME'.*", line: "define('DB_NAME', 'wordpress');" }
+    - { regexp: "define\\( *'DB_USER'.*", line: "define('DB_USER', 'wp_user');" }
+    - { regexp: "define\\( *'DB_PASSWORD'.*", line: "define('DB_PASSWORD', 'wp_pass');" }
+    - { regexp: "define\\( *'DB_HOST'.*", line: "define('DB_HOST', '158.160.84.186');" }
+
+- name: Установить права для www-data
+  file:
+    path: /var/www/html
+    owner: www-data
+    group: www-data
+    recurse: yes
+
+- name: Перезапустить Apache
+  service:
+    name: apache2
+    state: restarted
