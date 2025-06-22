@@ -1,0 +1,135 @@
+- name: Развёртывание MySQL master-slave кластера
+  hosts: all
+  become: true
+  vars:
+    mysql_root_pass: root
+    mysql_replica_user: replica
+    mysql_replica_pass: password
+    mysql_user: wp_user
+    mysql_pass: wp_pass
+    mysql_db: wordpress
+    mysql_network: mysql_net
+    mysql_port: 3306
+
+  pre_tasks:
+    - name: Создание сети Docker
+      community.docker.docker_network:
+        name: "{{ mysql_network }}"
+        state: present
+
+- name: Настройка мастера
+  hosts: master
+  become: true
+  vars:
+    mysql_root_pass: root
+    mysql_replica_user: replica
+    mysql_replica_pass: password
+    mysql_user: wp_user
+    mysql_pass: wp_pass
+    mysql_db: wordpress
+    mysql_network: mysql_net
+    mysql_port: 3306
+  tasks:
+    - name: Копирование my.cnf для master
+      copy:
+        src: ../configs/master/my.cnf
+        dest: /tmp/my.cnf
+        mode: '0644'
+
+    - name: Запуск контейнера MySQL Master
+      community.docker.docker_container:
+        name: mysql_master
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: "{{ mysql_root_pass }}"
+        ports:
+          - "{{ mysql_port }}:3306"
+        volumes:
+          - /tmp/my.cnf:/etc/mysql/my.cnf
+        networks:
+          - name: "{{ mysql_network }}"
+        restart_policy: always
+
+    - name: Ждать, пока MySQL примет соединения
+      wait_for:
+        port: 3306
+        host: 127.0.0.1
+        state: started
+        delay: 5
+        timeout: 60
+
+    - name: Создание пользователя репликации
+      community.mysql.mysql_user:
+        login_user: root
+        login_password: "{{ mysql_root_pass }}"
+        name: "{{ mysql_replica_user }}"
+        password: "{{ mysql_replica_pass }}"
+        host: '%'
+        priv: "*.*:REPLICATION SLAVE"
+        state: present
+
+    - name: Получить статус мастера
+      community.mysql.mysql_replication:
+        mode: getprimary
+        login_user: root
+        login_password: "{{ mysql_root_pass }}"
+      register: master_status
+
+- name: Настройка слейва
+  hosts: slave
+  become: true
+  vars:
+    mysql_root_pass: root
+    mysql_replica_user: replica
+    mysql_replica_pass: password
+    mysql_user: wp_user
+    mysql_pass: wp_pass
+    mysql_db: wordpress
+    mysql_network: mysql_net
+    mysql_port: 3306
+  tasks:
+    - name: Копирование my.cnf для slave
+      copy:
+        src: ../configs/slave/my.cnf
+        dest: /tmp/my.cnf
+        mode: '0644'
+
+    - name: Запуск контейнера MySQL Slave
+      community.docker.docker_container:
+        name: mysql_slave
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: "{{ mysql_root_pass }}"
+        ports:
+          - "{{ mysql_port }}:3306"
+        volumes:
+          - /tmp/my.cnf:/etc/mysql/my.cnf
+        networks:
+          - name: "{{ mysql_network }}"
+        restart_policy: always
+
+    - name: Ждать, пока MySQL примет соединения
+      wait_for:
+        port: 3306
+        host: 127.0.0.1
+        state: started
+        delay: 5
+        timeout: 60
+
+    - name: Настройка репликации
+      community.mysql.mysql_replication:
+        mode: changereplication
+        login_user: root
+        login_password: "{{ mysql_root_pass }}"
+        master_host: "{{ groups['master'][0] }}"
+        master_user: "{{ mysql_replica_user }}"
+        master_password: "{{ mysql_replica_pass }}"
+        master_log_file: "{{ hostvars[groups['master'][0]]['master_status']['File'] }}"
+        master_log_pos: "{{ hostvars[groups['master'][0]]['master_status']['Position'] }}"
+
+
+    - name: Запуск репликации
+      community.mysql.mysql_replication:
+        mode: startreplica
+        login_user: root
+        login_password: "{{ mysql_root_pass }}"

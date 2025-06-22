@@ -10,5 +10,11 @@
 #x6nffvUd5pzzk7yY6YOlAAAADFlhbmRleC5DbG91ZAE=                 
 #-----END OPENSSH PRIVATE KEY-----
 
-[web]
-130.193.53.88 ansible_user=vald3mar ansible_become_method=sudo ansible_become_pass=admin ansible_ssh_private_key_file=~/.ssh/yandex_cloud
+[master]
+158.160.84.186 ansible_user=vald3mar ansible_become_method=sudo ansible_become_pass=admin ansible_ssh_private_key_file=~/.ssh/yandex_cloud
+
+[slave]
+89.169.137.78 ansible_user=vald3mar ansible_become_method=sudo ansible_become_pass=admin ansible_ssh_private_key_file=~/.ssh/yandex_cloud
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3

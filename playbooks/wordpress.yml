@@ -1,0 +1,44 @@
+- name: Деплой WordPress, подключённого к MySQL Master
+  hosts: master
+  become: true
+  vars:
+    mysql_host: 158.160.84.186
+    mysql_port: 3306
+    mysql_db: wordpress
+    mysql_user: wp_user
+    mysql_pass: wp_pass
+    wordpress_port: 8080
+    wordpress_network: mysql_net
+
+  tasks:
+    - name: Убедиться, что база существует
+      community.mysql.mysql_db:
+        name: "{{ mysql_db }}"
+        state: present
+        login_user: root
+        login_password: root
+
+    - name: Убедиться, что пользователь существует и имеет доступ
+      community.mysql.mysql_user:
+        name: "{{ mysql_user }}"
+        password: "{{ mysql_pass }}"
+        priv: "{{ mysql_db }}.*:ALL"
+        host: "%"
+        state: present
+        login_user: root
+        login_password: root
+
+    - name: Запустить контейнер WordPress
+      community.docker.docker_container:
+        name: wordpress
+        image: wordpress:latest
+        ports:
+          - "{{ wordpress_port }}:80"
+        env:
+          WORDPRESS_DB_HOST: "{{ mysql_host }}:{{ mysql_port }}"
+          WORDPRESS_DB_NAME: "{{ mysql_db }}"
+          WORDPRESS_DB_USER: "{{ mysql_user }}"
+          WORDPRESS_DB_PASSWORD: "{{ mysql_pass }}"
+        networks:
+          - name: "{{ wordpress_network }}"
+        restart_policy: always
