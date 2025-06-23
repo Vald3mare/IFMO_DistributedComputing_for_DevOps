@@ -66,6 +66,22 @@
         delay: 5
         timeout: 60
 
+    - name: Создание БД
+      community.mysql.mysql_db:
+        name: "{{ mysql_db }}"
+        login_user: root
+        login_password: "{{ mysql_root_pass }}"
+
+    - name: Создание пользователя для WP
+      community.mysql.mysql_user:
+        name: "{{ mysql_user }}"
+        password: "{{ mysql_pass }}"
+        priv: "{{ mmysql_db }}.*:ALL"
+        login_user: root
+        login_password: "{{ mysql_root_pass }}"
+        host: '%'
+        state: present
+
     - name: Создание пользователя репликации
       community.mysql.mysql_user:
         login_user: root
