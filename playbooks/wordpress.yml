@@ -11,6 +11,14 @@
     wordpress_network: mysql_net
 
   tasks:
+    - name: Установка зависимостей Python, pip и PyMySQL
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-pymysql
+        update_cache: true
+
     - name: Убедиться, что база существует
       community.mysql.mysql_db:
         name: "{{ mysql_db }}"

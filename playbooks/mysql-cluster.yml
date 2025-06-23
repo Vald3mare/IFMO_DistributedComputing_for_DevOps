@@ -12,6 +12,14 @@
     mysql_port: 3306
 
   pre_tasks:
+    - name: Установка Python и зависимостей для работы с MySQL
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-pymysql
+        update_cache: true
+
     - name: Создание сети Docker
       community.docker.docker_network:
         name: "{{ mysql_network }}"
